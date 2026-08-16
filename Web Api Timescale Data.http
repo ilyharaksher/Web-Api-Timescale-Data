@@ -1,0 +1,6 @@
+@Web_Api_Timescale_Data_HostAddress = http://localhost:5090
+
+GET {{Web_Api_Timescale_Data_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
