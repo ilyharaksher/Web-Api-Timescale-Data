@@ -23,7 +23,6 @@ namespace Web_Api_Timescale_Data.Controllers
             {
                 return BadRequest("Файла нет или он пустой");
             }
-
             try
             {
                 await _csvImportService.ImportAsync(file);
@@ -33,7 +32,7 @@ namespace Web_Api_Timescale_Data.Controllers
                 return BadRequest(ex.Message);
             }
 
-            return Ok();
+            return Ok("Файл загружен!");
         }
     }
 }

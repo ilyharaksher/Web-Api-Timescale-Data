@@ -33,7 +33,7 @@ namespace Web_Api_Timescale_Data.Services
             var line = await reader.ReadLineAsync();
             int lineNumber = 1;
 
-            var ValuesList = new List<ValueEntity>();
+            var valuesList = new List<ValueEntity>();
 
             while (line != null)
             {
@@ -51,21 +51,23 @@ namespace Web_Api_Timescale_Data.Services
 
                 if (!DateTime.TryParseExact(
                     parts[0],
-                    "yyyy-MM-dd'T'HH:mm:ss.ffff'Z'",
+                    "yyyy-MM-dd'T'HH-mm-ss.ffff'Z'",
                     CultureInfo.InvariantCulture,
                     DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
                     out DateTime date
                     ))
                 {
-                    throw new CsvValidationException($"Ошибка в Записи {lineNumber}: Неверный формат даты");
+                    throw new CsvValidationException($"Ошибка в Записи {lineNumber}: Неверный формат даты. Нужно: yyyy-MM-dd'T'HH-mm-ss.ffff'Z' ");
                 }
-
+                
                 if (date > DateTime.Now || date < new DateTime(2000, 1, 1))
                 {
                     throw new CsvValidationException($"Ошибка в Записи {lineNumber}: Дата не может быть позже текущей и раньше 01.01.2000");
                 }
 
-                if (!double.TryParse(parts[1], out double executionTime))
+                string part1 = parts[1].Replace(",", ".");
+
+                if (!double.TryParse(part1, CultureInfo.InvariantCulture, out double executionTime))
                 {
                     throw new CsvValidationException($"Ошибка в Записи {lineNumber}: Неверный формат ExecutionTime");
                 }
@@ -75,7 +77,9 @@ namespace Web_Api_Timescale_Data.Services
                     throw new CsvValidationException($"Ошибка в Записи {lineNumber}: Время выполнения не может быть меньше 0");
                 }
 
-                if (!double.TryParse(parts[2], out double value))
+                string part2 = parts[2].Replace(",", ".");
+
+                if (!double.TryParse(part2, CultureInfo.InvariantCulture, out double value))
                 {
                     throw new CsvValidationException($"Ошибка в Записи {lineNumber}: Неверный формат Value");
                 }
@@ -93,29 +97,29 @@ namespace Web_Api_Timescale_Data.Services
                     Value = value
                 };
 
-                ValuesList.Add(measure);
+                valuesList.Add(measure);
                 lineNumber++;
                 line = await reader.ReadLineAsync();
             }
 
-            if (ValuesList.Count < 1)
+            if (valuesList.Count < 1)
             {
                 throw new CsvValidationException("Количество записей в файле не может быть меньше 1");
             }
 
 
-            DateTime minDate = ValuesList.Min(x => x.Date);
-            DateTime maxDate = ValuesList.Max(x => x.Date);
+            DateTime minDate = valuesList.Min(x => x.Date);
+            DateTime maxDate = valuesList.Max(x => x.Date);
             Double delta = (maxDate - minDate).TotalSeconds;
-            Double avgExecTime = ValuesList.Average(x => x.ExecutionTime);
-            Double avgValue = ValuesList.Average(x => x.Value);
-            Double maxValue = ValuesList.Max(x => x.Value);
-            Double minValue = ValuesList.Min(x => x.Value);
-            
-            var sorted = ValuesList.OrderBy(x => x.Value).ToList();
+            Double avgExecTime = valuesList.Average(x => x.ExecutionTime);
+            Double avgValue = valuesList.Average(x => x.Value);
+            Double maxValue = valuesList.Max(x => x.Value);
+            Double minValue = valuesList.Min(x => x.Value);
+
+            var sorted = valuesList.OrderBy(x => x.Value).ToList();
             int length = sorted.Count();
             Double medianValue = length % 2 == 0
-                ? (sorted[length / 2].Value + sorted[length / 2 - 1].Value) / 2 
+                ? (sorted[length / 2].Value + sorted[length / 2 - 1].Value) / 2
                 : sorted[length / 2].Value;
 
 
@@ -131,7 +135,25 @@ namespace Web_Api_Timescale_Data.Services
                 MinValue = minValue
             };
 
-            
+
+            var oldValues = await _dbContext.Values
+                .Where(x => x.FileName == fileName)
+                .ToListAsync();
+            var oldResult = await _dbContext.Results
+                .FirstOrDefaultAsync(x => x.FileName == fileName);
+
+            _dbContext.RemoveRange(oldValues);
+
+            if (oldResult != null)
+            {
+                _dbContext.Remove(oldResult);
+            }
+
+            _dbContext.Values.AddRange(valuesList);
+            _dbContext.Results.Add(result);
+
+
+            await _dbContext.SaveChangesAsync();
         }
     }
 }
